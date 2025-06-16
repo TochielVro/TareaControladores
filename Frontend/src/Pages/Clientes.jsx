@@ -22,7 +22,7 @@ function Clientes() {
     const fetchClientes = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('https://api.example.com/clientes');
+        const response = await fetch('http://localhost:3001/api/clientes');
         if (!response.ok) throw new Error("Error al cargar clientes");
         const data = await response.json();
         setClientes(data);
@@ -48,8 +48,8 @@ function Clientes() {
     
     try {
       const url = editMode 
-        ? `https://api.example.com/clientes/${currentCliente.id}`
-        : 'https://api.example.com/clientes';
+        ? `http://localhost:3001/api/clientes/${currentCliente.id}`
+        : 'http://localhost:3001/api/clientes';
       
       const method = editMode ? 'PUT' : 'POST';
       
@@ -62,7 +62,7 @@ function Clientes() {
       if (!response.ok) throw new Error("Error al guardar");
 
       // Recargar lista
-      const updatedResponse = await fetch('https://api.example.com/clientes');
+      const updatedResponse = await fetch('http://localhost:3001/api/clientes');
       const updatedData = await updatedResponse.json();
       setClientes(updatedData);
       
@@ -93,7 +93,7 @@ function Clientes() {
     if (!window.confirm('¿Eliminar este cliente?')) return;
     
     try {
-      const response = await fetch(`https://api.example.com/clientes/${id}`, {
+      const response = await fetch(`http://localhost:3001/api/clientes/${id}`, {
         method: 'DELETE',
       });
       
