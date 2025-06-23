@@ -1,61 +1,67 @@
 const ClienteModel = require('../Models/clientes.model');
 
-const getClientes = (req, res) => {
-  ClienteModel.obtenerClientes((err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+const getClientes = async (req, res) => {
+  try {
+    const clientes = await ClienteModel.obtenerClientes();
+    res.json(clientes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
-const getClienteById = (req, res) => {
-  ClienteModel.obtenerClientePorId(req.params.id, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (rows.length === 0) return res.status(404).json({ mensaje: 'Cliente no encontrado' });
-    res.json(rows[0]);
-  });
+const getClienteById = async (req, res) => {
+  try {
+    const cliente = await ClienteModel.obtenerClientePorId(req.params.id);
+    if (!cliente) return res.status(404).json({ mensaje: 'Cliente no encontrado' });
+    res.json(cliente);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
-const createCliente = (req, res) => {
+const createCliente = async (req, res) => {
   const { nombre, documento_identidad, direccion, telefono } = req.body;
   
   if (!nombre || !documento_identidad) {
     return res.status(400).json({ error: 'Nombre y documento_identidad son obligatorios' });
   }
 
-  ClienteModel.crearCliente(req.body, (err, result) => {
-    if (err) {
-      if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ error: 'El documento de identidad ya existe' });
-      }
-      return res.status(500).json({ error: err.message });
+  try {
+    const result = await ClienteModel.crearCliente(req.body);
+    res.status(201).json({ mensaje: 'Cliente creado', id: result.id });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'El documento de identidad ya existe' });
     }
-    res.status(201).json({ mensaje: 'Cliente creado', id: result.insertId });
-  });
+    res.status(500).json({ error: err.message });
+  }
 };
 
-const updateCliente = (req, res) => {
-  ClienteModel.actualizarCliente(req.params.id, req.body, (err, result) => {
-    if (err) {
-      if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ error: 'El documento de identidad ya existe' });
-      }
-      return res.status(500).json({ error: err.message });
-    }
+const updateCliente = async (req, res) => {
+  try {
+    const result = await ClienteModel.actualizarCliente(req.params.id, req.body);
     if (result.affectedRows === 0) {
       return res.status(404).json({ mensaje: 'Cliente no encontrado' });
     }
     res.json({ mensaje: 'Cliente actualizado' });
-  });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'El documento de identidad ya existe' });
+    }
+    res.status(500).json({ error: err.message });
+  }
 };
 
-const deleteCliente = (req, res) => {
-  ClienteModel.eliminarCliente(req.params.id, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
+const deleteCliente = async (req, res) => {
+  try {
+    const result = await ClienteModel.eliminarCliente(req.params.id);
     if (result.affectedRows === 0) {
       return res.status(404).json({ mensaje: 'Cliente no encontrado' });
     }
     res.json({ mensaje: 'Cliente eliminado' });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
 module.exports = {

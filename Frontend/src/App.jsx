@@ -1,3 +1,5 @@
+
+import "bootstrap-icons/font/bootstrap-icons.css";
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './Layouts/Layout';
 import Dashboard from './Pages/Dashboard';

@@ -7,6 +7,7 @@ const clientesRoutes = require('./Routes/clientes.routes');
 const usuariosRoutes = require('./Routes/usuarios.routes');
 const productosRoutes = require('./Routes/productos.routes');
 const ventasRoutes = require('./Routes/ventas.routes');
+const estadisticasRoutes = require('./Routes/estadisticas.routes'); // Nueva línea
 
 // Middlewares
 app.use(cors());
@@ -17,6 +18,7 @@ app.use('/api/clientes', clientesRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/productos', productosRoutes);
 app.use('/api/ventas', ventasRoutes);
+app.use('/api', estadisticasRoutes); // Nueva línea
 
 // Iniciar servidor
 app.listen(3001, () => {
