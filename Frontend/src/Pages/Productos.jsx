@@ -1,113 +1,142 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Form, Modal, Alert, Spinner } from 'react-bootstrap';
+import React, { useEffect, useState } from 'react';
+import { 
+  getProductos, 
+  createProducto, 
+  updateProducto, 
+  deleteProducto 
+} from '../Services/productoService';
 
-function Productos() {
-  // Estados del componente
-  const [productos, setProductos] = useState([]); // Lista de productos
-  const [showModal, setShowModal] = useState(false); // Mostrar/ocultar modal
-  const [formData, setFormData] = useState({ nombre: '', precio: '', stock: '' }); // Formulario
-  const [isLoading, setIsLoading] = useState(false); // Estado de carga
-  const [editMode, setEditMode] = useState(false); // Modo edición
-  const [currentId, setCurrentId] = useState(null); // ID del producto a editar
-  const [alert, setAlert] = useState(null); // Alerta de éxito o error
+const Productos = () => {
+  const [productos, setProductos] = useState([]);
+  const [formData, setFormData] = useState({ 
+    nombre: '', 
+    precio: '', 
+    stock: '' 
+  });
+  const [editando, setEditando] = useState(false);
+  const [productoId, setProductoId] = useState(null);
 
-  // Se ejecuta al cargar el componente (componentDidMount)
   useEffect(() => {
     cargarProductos();
   }, []);
 
-  // Función para obtener productos desde el backend
-  const cargarProductos = async () => {
-    try {
-      const res = await fetch('http://localhost:3001/api/productos');
-      const data = await res.json();
-      setProductos(data);
-    } catch (err) {
-      setAlert({ type: 'danger', message: 'Error al cargar productos' });
-    }
+  const cargarProductos = () => {
+    getProductos()
+      .then(res => setProductos(res.data))
+      .catch(err => console.error('Error cargando productos:', err));
   };
 
-  // Manejar cambios en los inputs del formulario
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const handleChange = e => {
+    setFormData({ 
+      ...formData, 
+      [e.target.name]: e.target.value 
+    });
   };
 
-  // Crear o actualizar un producto
-  const handleSubmit = async (e) => {
+  const handleSubmit = e => {
     e.preventDefault();
-    setIsLoading(true);
-
-    const method = editMode ? 'PUT' : 'POST';
-    const url = editMode
-      ? `http://localhost:3001/api/productos/${currentId}`
-      : 'http://localhost:3001/api/productos';
-
-    try {
-      await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      setAlert({ type: 'success', message: editMode ? 'Producto actualizado' : 'Producto creado' });
-      cargarProductos(); // Recargar lista después de guardar
-      handleClose();     // Cerrar el modal
-    } catch {
-      setAlert({ type: 'danger', message: 'Error al guardar' });
-    } finally {
-      setIsLoading(false);
+    
+    if (editando) {
+      updateProducto(productoId, formData)
+        .then(() => {
+          cargarProductos();
+          resetForm();
+        })
+        .catch(err => console.error('Error actualizando producto:', err));
+    } else {
+      createProducto(formData)
+        .then(() => {
+          cargarProductos();
+          resetForm();
+        })
+        .catch(err => console.error('Error creando producto:', err));
     }
   };
 
-  // Preparar formulario para editar un producto
-  const handleEdit = (producto) => {
+  const handleEdit = producto => {
     setFormData({
       nombre: producto.nombre,
       precio: producto.precio,
       stock: producto.stock
     });
-    setCurrentId(producto.id);
-    setEditMode(true);
-    setShowModal(true);
+    setEditando(true);
+    setProductoId(producto.id);
   };
 
-  // Eliminar un producto
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Eliminar este producto?')) return;
-    try {
-      await fetch(`http://localhost:3001/api/productos/${id}`, { method: 'DELETE' });
-      setAlert({ type: 'success', message: 'Producto eliminado' });
-      cargarProductos();
-    } catch {
-      setAlert({ type: 'danger', message: 'Error al eliminar' });
+  const handleDelete = id => {
+    if (window.confirm('¿Estás seguro de eliminar este producto?')) {
+      deleteProducto(id)
+        .then(() => cargarProductos())
+        .catch(err => console.error('Error eliminando producto:', err));
     }
   };
 
-  // Cerrar el modal y resetear el formulario
-  const handleClose = () => {
-    setShowModal(false);
-    setEditMode(false);
+  const resetForm = () => {
     setFormData({ nombre: '', precio: '', stock: '' });
-    setCurrentId(null);
+    setEditando(false);
+    setProductoId(null);
   };
 
   return (
-    <div className="container py-4">
-      {/* Encabezado y botón para agregar */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2>Gestión de Productos</h2>
-        <Button onClick={() => setShowModal(true)}>＋ Nuevo Producto</Button>
-      </div>
+    <div className="container mt-4">
+      <h3>Productos</h3>
+      
+      <form className="row g-3 mb-4" onSubmit={handleSubmit}>
+        <div className="col-md-3">
+          <input
+            type="text"
+            className="form-control"
+            name="nombre"
+            value={formData.nombre}
+            onChange={handleChange}
+            placeholder="Nombre"
+            required
+          />
+        </div>
+        <div className="col-md-2">
+          <input
+            type="number"
+            className="form-control"
+            name="precio"
+            value={formData.precio}
+            onChange={handleChange}
+            placeholder="Precio"
+            min="0"
+            step="0.01"
+            required
+          />
+        </div>
+        <div className="col-md-2">
+          <input
+            type="number"
+            className="form-control"
+            name="stock"
+            value={formData.stock}
+            onChange={handleChange}
+            placeholder="Stock"
+            min="0"
+            required
+          />
+        </div>
+        <div className="col-md-2">
+          <button type="submit" className="btn btn-primary w-100">
+            {editando ? 'Actualizar' : 'Agregar'}
+          </button>
+        </div>
+        {editando && (
+          <div className="col-md-2">
+            <button 
+              type="button" 
+              className="btn btn-secondary w-100"
+              onClick={resetForm}
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+      </form>
 
-      {/* Mostrar alerta */}
-      {alert && (
-        <Alert variant={alert.type} onClose={() => setAlert(null)} dismissible>
-          {alert.message}
-        </Alert>
-      )}
-
-      {/* Tabla de productos */}
-      <Table striped bordered hover>
+      <table className="table table-striped">
         <thead>
           <tr>
             <th>ID</th>
@@ -122,47 +151,28 @@ function Productos() {
             <tr key={p.id}>
               <td>{p.id}</td>
               <td>{p.nombre}</td>
-              <td>${p.precio}</td>
+              <td>${parseFloat(p.precio).toFixed(2)}</td>
               <td>{p.stock}</td>
               <td>
-                <Button variant="warning" size="sm" onClick={() => handleEdit(p)}>✏️</Button>{' '}
-                <Button variant="danger" size="sm" onClick={() => handleDelete(p.id)}>🗑️</Button>
+                <button 
+                  className="btn btn-warning btn-sm me-2"
+                  onClick={() => handleEdit(p)}
+                >
+                  Editar
+                </button>
+                <button 
+                  className="btn btn-danger btn-sm"
+                  onClick={() => handleDelete(p.id)}
+                >
+                  Eliminar
+                </button>
               </td>
             </tr>
           ))}
         </tbody>
-      </Table>
-
-      {/* Modal para crear/editar producto */}
-      <Modal show={showModal} onHide={handleClose}>
-        <Modal.Header closeButton>
-          <Modal.Title>{editMode ? 'Editar Producto' : 'Nuevo Producto'}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Nombre</Form.Label>
-              <Form.Control name="nombre" value={formData.nombre} onChange={handleChange} required />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Precio</Form.Label>
-              <Form.Control type="number" name="precio" value={formData.precio} onChange={handleChange} required />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Stock</Form.Label>
-              <Form.Control type="number" name="stock" value={formData.stock} onChange={handleChange} required />
-            </Form.Group>
-            <div className="text-end">
-              <Button variant="secondary" onClick={handleClose}>Cancelar</Button>{' '}
-              <Button type="submit" variant="primary" disabled={isLoading}>
-                {isLoading ? 'Guardando...' : 'Guardar'}
-              </Button>
-            </div>
-          </Form>
-        </Modal.Body>
-      </Modal>
+      </table>
     </div>
   );
-}
+};
 
 export default Productos;
