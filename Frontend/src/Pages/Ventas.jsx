@@ -1,151 +1,326 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Form, Alert } from 'react-bootstrap';
+import React, { useEffect, useState } from 'react';
+import { getVentas, getVentaById, createVenta } from '../Services/ventaService';
+import { getClientes } from '../Services/clienteService';
+import { getProductos } from '../Services/productoService';
 
-function Ventas() {
-  // Estados del componente
-  const [clientes, setClientes] = useState([]);      // Lista de clientes
-  const [productos, setProductos] = useState([]);    // Lista de productos
-  const [clienteId, setClienteId] = useState('');    // ID del cliente seleccionado
-  const [carrito, setCarrito] = useState([]);        // Lista de productos en el carrito
-  const [alert, setAlert] = useState(null);          // Mensajes de éxito o error
+const Ventas = () => {
+  const [ventas, setVentas] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [productos, setProductos] = useState([]);
+  const [detalles, setDetalles] = useState([]);
+  const [formData, setFormData] = useState({
+    cliente_id: '',
+    usuario_id: 1,
+    total: 0,
+    detalles: []
+  });
 
-  // useEffect: cargar clientes y productos al inicio
+  const [selectedProduct, setSelectedProduct] = useState({
+    producto_id: '',
+    cantidad: 1,
+    precio_unitario: 0,
+    subtotal: 0
+  });
+
   useEffect(() => {
-    fetch('http://localhost:3001/api/clientes')
-      .then(res => res.json())
-      .then(setClientes);
-
-    fetch('http://localhost:3001/api/productos')
-      .then(res => res.json())
-      .then(setProductos);
+    cargarDatosIniciales();
   }, []);
 
-  // Agrega un producto al carrito o aumenta su cantidad si ya está
-  const agregarProducto = (producto) => {
-    const existente = carrito.find(p => p.id === producto.id);
-    if (existente) {
-      setCarrito(carrito.map(p =>
-        p.id === producto.id ? { ...p, cantidad: p.cantidad + 1 } : p
-      ));
-    } else {
-      setCarrito([...carrito, { ...producto, cantidad: 1 }]);
-    }
+  const cargarDatosIniciales = () => {
+    getVentas().then(res => setVentas(res.data)).catch(err => console.error('Error cargando ventas:', err));
+    getClientes().then(res => setClientes(res.data)).catch(err => console.error('Error cargando clientes:', err));
+    getProductos().then(res => setProductos(res.data.filter(p => p.stock > 0))).catch(err => console.error('Error cargando productos:', err));
   };
 
-  // Calcula el total del carrito
-  const calcularTotal = () =>
-    carrito.reduce((acc, p) => acc + p.precio * p.cantidad, 0).toFixed(2);
+  const handleClienteChange = e => {
+    setFormData({ ...formData, cliente_id: e.target.value });
+  };
 
-  // Función para confirmar la venta
-  const confirmarVenta = async () => {
-    // Validar que haya cliente y productos seleccionados
-    if (!clienteId || carrito.length === 0) {
-      setAlert({ type: 'danger', message: 'Selecciona cliente y productos' });
+  const handleProductoChange = e => {
+    const productoId = e.target.value;
+    const producto = productos.find(p => p.id === parseInt(productoId));
+
+    const precio = producto ? Number(producto.precio) : 0;
+    const cantidad = selectedProduct.cantidad;
+
+    setSelectedProduct({
+      producto_id: productoId,
+      cantidad: cantidad,
+      precio_unitario: precio,
+      subtotal: cantidad * precio
+    });
+  };
+
+  const handleCantidadChange = e => {
+    const cantidad = parseInt(e.target.value) || 0;
+    const precio = Number(selectedProduct.precio_unitario);
+
+    setSelectedProduct({
+      ...selectedProduct,
+      cantidad: cantidad,
+      subtotal: cantidad * precio
+    });
+  };
+
+  const agregarDetalle = () => {
+    if (!selectedProduct.producto_id || selectedProduct.cantidad <= 0) return;
+
+    const producto = productos.find(p => p.id === parseInt(selectedProduct.producto_id));
+    if (!producto) return;
+
+    if (selectedProduct.cantidad > producto.stock) {
+      alert('No hay suficiente stock disponible');
       return;
     }
 
-    // Formatear los productos para el backend
-    const detalles = carrito.map(p => ({
-      producto_id: p.id,
-      cantidad: p.cantidad,
-      precio_unitario: p.precio,
-      subtotal: (p.precio * p.cantidad)
-    }));
-
-    // Crear objeto de venta
-    const venta = {
-      cliente_id: parseInt(clienteId),
-      usuario_id: 1, // ID del usuario que registra (puedes extraerlo de localStorage)
-      total: detalles.reduce((acc, d) => acc + d.subtotal, 0),
-      detalles,
+    const nuevoDetalle = {
+      producto_id: selectedProduct.producto_id,
+      cantidad: selectedProduct.cantidad,
+      precio_unitario: Number(selectedProduct.precio_unitario),
+      subtotal: Number(selectedProduct.subtotal),
+      producto_nombre: producto.nombre
     };
 
-    try {
-      // Enviar venta al backend
-      await fetch('http://localhost:3001/api/ventas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(venta)
-      });
+    const nuevosDetalles = [...detalles, nuevoDetalle];
+    const nuevoTotal = formData.total + nuevoDetalle.subtotal;
 
-      // Mostrar mensaje de éxito y limpiar formulario
-      setAlert({ type: 'success', message: 'Venta registrada correctamente' });
-      setClienteId('');
-      setCarrito([]);
-    } catch {
-      // Mostrar mensaje de error
-      setAlert({ type: 'danger', message: 'Error al registrar venta' });
+    setDetalles(nuevosDetalles);
+    setFormData({
+      ...formData,
+      total: nuevoTotal,
+      detalles: nuevosDetalles.map(d => ({
+        producto_id: d.producto_id,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal: d.subtotal
+      }))
+    });
+
+    setSelectedProduct({
+      producto_id: '',
+      cantidad: 1,
+      precio_unitario: 0,
+      subtotal: 0
+    });
+  };
+
+  const eliminarDetalle = (index) => {
+    const detalleEliminado = detalles[index];
+    const nuevosDetalles = detalles.filter((_, i) => i !== index);
+    const nuevoTotal = formData.total - detalleEliminado.subtotal;
+
+    setDetalles(nuevosDetalles);
+    setFormData({
+      ...formData,
+      total: nuevoTotal,
+      detalles: nuevosDetalles.map(d => ({
+        producto_id: d.producto_id,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal: d.subtotal
+      }))
+    });
+  };
+
+  const handleSubmit = e => {
+    e.preventDefault();
+
+    if (!formData.cliente_id || formData.detalles.length === 0) {
+      alert('Seleccione un cliente y agregue al menos un producto');
+      return;
     }
+
+    createVenta(formData)
+      .then(res => {
+        alert(`Venta creada con ID: ${res.data.id}`);
+        cargarDatosIniciales();
+        setFormData({ cliente_id: '', usuario_id: 1, total: 0, detalles: [] });
+        setDetalles([]);
+      })
+      .catch(err => {
+        console.error('Error creando venta:', err);
+        alert('Error al crear la venta');
+      });
   };
 
   return (
-    <div className="container py-4">
-      <h2 className="mb-4">Registrar Nueva Venta</h2>
+    <div className="container mt-4">
+      <h3>Registro de Ventas</h3>
 
-      {/* Alerta de éxito o error */}
-      {alert && (
-        <Alert variant={alert.type} onClose={() => setAlert(null)} dismissible>
-          {alert.message}
-        </Alert>
+      <div className="card mb-4">
+        <div className="card-body">
+          <h5 className="card-title">Nueva Venta</h5>
+
+          <div className="mb-3">
+            <label className="form-label">Cliente</label>
+            <select
+              className="form-select"
+              value={formData.cliente_id}
+              onChange={handleClienteChange}
+              required
+            >
+              <option value="">Seleccione un cliente</option>
+              {clientes.map(cliente => (
+                <option key={cliente.id} value={cliente.id}>
+                  {cliente.nombre} - {cliente.documento_identidad}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="row g-3 mb-3">
+            <div className="col-md-5">
+              <label className="form-label">Producto</label>
+              <select
+                className="form-select"
+                value={selectedProduct.producto_id}
+                onChange={handleProductoChange}
+              >
+                <option value="">Seleccione un producto</option>
+                {productos.map(producto => (
+                  <option key={producto.id} value={producto.id}>
+                    {producto.nombre} - Stock: {producto.stock} - ${Number(producto.precio).toFixed(2)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">Cantidad</label>
+              <input
+                type="number"
+                className="form-control"
+                min="1"
+                value={selectedProduct.cantidad}
+                onChange={handleCantidadChange}
+              />
+            </div>
+            <div className="col-md-3">
+              <label className="form-label">Precio Unitario</label>
+              <input
+                type="text"
+                className="form-control"
+                value={`$${Number(selectedProduct.precio_unitario).toFixed(2)}`}
+                readOnly
+              />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label">Subtotal</label>
+              <input
+                type="text"
+                className="form-control"
+                value={`$${Number(selectedProduct.subtotal).toFixed(2)}`}
+                readOnly
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={agregarDetalle}
+            disabled={!selectedProduct.producto_id}
+          >
+            Agregar Producto
+          </button>
+        </div>
+      </div>
+
+      {detalles.length > 0 && (
+        <div className="card mb-4">
+          <div className="card-body">
+            <h5 className="card-title">Detalle de Venta</h5>
+
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Cantidad</th>
+                  <th>Precio Unitario</th>
+                  <th>Subtotal</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detalles.map((detalle, index) => (
+                  <tr key={index}>
+                    <td>{detalle.producto_nombre}</td>
+                    <td>{detalle.cantidad}</td>
+                    <td>${Number(detalle.precio_unitario).toFixed(2)}</td>
+                    <td>${Number(detalle.subtotal).toFixed(2)}</td>
+                    <td>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => eliminarDetalle(index)}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="3" className="text-end"><strong>Total:</strong></td>
+                  <td><strong>${Number(formData.total).toFixed(2)}</strong></td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={handleSubmit}
+            >
+              Registrar Venta
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* Selector de cliente */}
-      <Form.Group className="mb-3">
-        <Form.Label>Cliente</Form.Label>
-        <Form.Select value={clienteId} onChange={e => setClienteId(e.target.value)} required>
-          <option value="">Selecciona un cliente</option>
-          {clientes.map(c => (
-            <option key={c.id} value={c.id}>{c.nombre}</option>
-          ))}
-        </Form.Select>
-      </Form.Group>
+      <div className="card">
+        <div className="card-body">
+          <h5 className="card-title">Historial de Ventas</h5>
 
-      {/* Botones de productos */}
-      <Form.Group className="mb-3">
-        <Form.Label>Productos</Form.Label>
-        <div className="d-flex flex-wrap gap-2">
-          {productos.map(p => (
-            <Button
-              key={p.id}
-              variant="outline-primary"
-              onClick={() => agregarProducto(p)}
-            >
-              {p.nombre} - ${p.precio}
-            </Button>
-          ))}
+          <table className="table table-striped">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Total</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ventas.map(venta => (
+                <tr key={venta.id}>
+                  <td>{venta.id}</td>
+                  <td>{new Date(venta.fecha).toLocaleString()}</td>
+                  <td>{venta.cliente_nombre}</td>
+                  <td>${Number(venta.total).toFixed(2)}</td>
+                  <td>
+                    <button
+                      className="btn btn-info btn-sm"
+                      onClick={() => {
+                        getVentaById(venta.id)
+                          .then(res => {
+                            alert(`Detalles de la venta:\n${JSON.stringify(res.data, null, 2)}`);
+                          })
+                          .catch(err => console.error('Error obteniendo venta:', err));
+                      }}
+                    >
+                      Ver Detalles
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </Form.Group>
-
-      {/* Tabla del carrito */}
-      <h5 className="mt-4">Carrito</h5>
-      <Table bordered>
-        <thead>
-          <tr>
-            <th>Producto</th>
-            <th>Cantidad</th>
-            <th>Precio</th>
-            <th>Subtotal</th>
-          </tr>
-        </thead>
-        <tbody>
-          {carrito.map(p => (
-            <tr key={p.id}>
-              <td>{p.nombre}</td>
-              <td>{p.cantidad}</td>
-              <td>${p.precio}</td>
-              <td>${(p.precio * p.cantidad).toFixed(2)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-
-      {/* Total y botón de confirmar */}
-      <div className="d-flex justify-content-between align-items-center">
-        <h5>Total: ${calcularTotal()}</h5>
-        <Button variant="success" onClick={confirmarVenta}>Confirmar Venta</Button>
       </div>
     </div>
   );
-}
+};
 
 export default Ventas;
